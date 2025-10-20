@@ -1,9 +1,13 @@
 import json
 import requests
 import sys
+import os
+from dotenv import load_dotenv
 
+load_dotenv()
+api_key = os.getenv("API_KEY")
 def get_bus_coords():
-    API_KEY = "F02CFCAC-3067-45DB-835E-A102C773D6F2"
+    API_KEY = api_key
     stop_ID = 47
 
     url = f"http://api.thebus.org/arrivalsJSON/?key={API_KEY}&stop={stop_ID}"
