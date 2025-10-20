@@ -1,0 +1,41 @@
+# Learn more https://docs.github.com/en/get-started/getting-started-with-git/ignoring-files
+.env
+# dependencies
+/BusApp/node_modules/
+
+# Expo
+/BusApp/.expo/
+/BusApp/dist/
+/BusApp/web-build/
+/BusApp/expo-env.d.ts
+
+# Native
+/BusApp/.kotlin/
+/BusApp/*.orig.*
+/BusApp/*.jks
+/BusApp/*.p8
+/BusApp/*.p12
+/BusApp/*.key
+/BusApp/*.mobileprovision
+
+# Metro
+/BusApp/.metro-health-check*
+
+# debug
+/BusApp/npm-debug.*
+/BusApp/yarn-debug.*
+/BusApp/yarn-error.*
+
+# macOS
+/BusApp/.DS_Store
+/BusApp/*.pem
+
+# local env files
+/BusApp/.env*.local
+
+# typescript
+/BusApp/*.tsbuildinfo
+
+# generated native folders
+/BusApp/ios
+/BusApp/android
