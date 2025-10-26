@@ -2,6 +2,7 @@ import React, { useState, useRef } from 'react';
 import { View, StyleSheet } from 'react-native';
 import MapView, { UrlTile, PROVIDER_DEFAULT, Marker } from 'react-native-maps';
 import BottomBar from './BottomBar';
+import stops from '../assets/stops.json'
 
 
 const OahuMap = () => {
@@ -37,11 +38,6 @@ const OahuMap = () => {
   
     const [selectedCoord, setSelectedCoord] = useState(null)
   
-    const handleMapPress = (event) => {
-      const { latitude, longitude } = event.nativeEvent.coordinate;
-      console.log("User clicked: ", latitude, longitude);
-      setSelectedCoord({latitude, longitude});
-    };
     // Southwest: 20.79775211599588 -158.2575068774979
     // Northeast: 22.09183846946574 -157.63530947229376
     return (
@@ -56,7 +52,6 @@ const OahuMap = () => {
             latitudeDelta: 0.7,
             longitudeDelta: 0.7,
           }}
-          onPress={handleMapPress}
           onRegionChangeComplete={handleRegionChangeComplete}
         >
           <UrlTile
@@ -66,13 +61,10 @@ const OahuMap = () => {
             tileSize={256}
             shouldReplaceMapContent={true}
           />
-          {selectedCoord && (
-            <Marker 
-              coordinate={selectedCoord}
-              title="Tapped"
-              description={`Lat: ${selectedCoord.latitude.toFixed(5)}, Lon: ${selectedCoord.longitude.toFixed(5)}`}
-            />
-          )}
+
+          {stops.map(stop => (
+            <Marker key={stop.id} coordinate={{latitude: stop.lat, longitude: stop.lon}} />
+          ))}
         </MapView>
         <BottomBar />
       </View>
