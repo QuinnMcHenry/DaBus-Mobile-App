@@ -1,12 +1,58 @@
-import React, { useState, useRef } from 'react';
-import { View, StyleSheet } from 'react-native';
+import React, { useState, useRef, useEffect } from 'react';
+import { View, StyleSheet, Modal, TextInput, Button } from 'react-native';
 import MapView, { UrlTile, PROVIDER_DEFAULT, Marker } from 'react-native-maps';
 import BottomBar from './BottomBar';
 import stops from '../assets/stops.json'
 
 
+function haversine(lat1, lon1, lat2, lon2) {
+    const R = 6371000;
+    const toRad = x => (x * Math.PI) / 180;
+
+    const phi1 = toRad(lat1);
+    const phi2 = toRad(lat2);
+    const dphi = toRad(lat2 - lat1);
+    const dlambda = toRad(lon2 - lon1);
+
+    const a = 
+        Math.sin(dphi / 2) ** 2 +
+        Math.cos(phi1) * Math.cos(phi2) * Math.sin(dlambda / 2) ** 2;
+
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+    return R * c
+}
+
+
 const OahuMap = () => {
+    const [userLocation, setUserLocation] = useState(null);
+    const [topStops, setTopStops] = useState([]);
     const mapRef = useRef(null);
+
+    useEffect(() => {
+        if (!userLocation) return;
+        const [lat, lon] = userLocation;
+
+        
+        mapRef.current.animateToRegion({
+            latitudeDelta: 0.009,
+            longitudeDelta: 0.009,
+            latitude: lat,
+            longitude: lon,
+        }, 500);
+
+    const closest = stops
+        .map(stop => ({
+            ...stop,
+            distance: haversine(userLocation[0], userLocation[1], stop.lat, stop.lon)
+        }))
+        .sort((a, b) => a.distance - b.distance)
+        .slice(0, 5);
+
+    setTopStops(closest);
+    }, [userLocation]);
+
+
     const oahuBoundary = {
       northEast: {latitude: 22.09183846946574, longitude:  -157.63530947229376},
       southWest: {latitude: 20.79775211599588, longitude: -158.2575068774979}
@@ -14,6 +60,7 @@ const OahuMap = () => {
   
   
   const handleRegionChangeComplete = (region) => {
+
     const centerLat = (oahuBoundary.northEast.latitude + oahuBoundary.southWest.latitude) / 2;
     const centerLng = (oahuBoundary.northEast.longitude + oahuBoundary.southWest.longitude) / 2;
   
@@ -35,9 +82,7 @@ const OahuMap = () => {
       }, 300);
     }
   };
-  
-    const [selectedCoord, setSelectedCoord] = useState(null)
-  
+    
     // Southwest: 20.79775211599588 -158.2575068774979
     // Northeast: 22.09183846946574 -157.63530947229376
     return (
@@ -62,11 +107,16 @@ const OahuMap = () => {
             shouldReplaceMapContent={true}
           />
 
-          {stops.map(stop => (
-            <Marker key={stop.id} coordinate={{latitude: stop.lat, longitude: stop.lon}} />
+          {userLocation && topStops.map(stop => (
+            <Marker
+                key={stop.id}
+                coordinate={{ latitude: stop.lat, longitude: stop.lon }}
+                title={`Stop ${stop.id}`}
+                />
           ))}
+
         </MapView>
-        <BottomBar />
+        <BottomBar onLocationFound={setUserLocation} />
       </View>
     );
   }
@@ -82,4 +132,12 @@ const styles = StyleSheet.create({
     map: {
       ...StyleSheet.absoluteFillObject,
     },
+    popupContainer: {
+        flex: 1,
+        backgroundColor: 'rgba(0, 0, 0, 0.5)',
+        justifyContent: 'center',
+        alignItems: 'center'
+    },
+    popupText: { fontSize: 18, color: '#fff', marginBottom: 10 },
+    input: { backgroundColor: '#fff', width: 250, padding: 8, borderRadius: 5, marginBottom: 10 },
   });

@@ -1,9 +1,8 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { View, TouchableOpacity, Text, StyleSheet } from 'react-native';
 import * as Location from 'expo-location';
 
-const BottomBar = () => {
-    const [userLatLon, setUserLatLon] = useState(null);
+const BottomBar = ({onLocationFound}) => {
   
     const handleFindStops = async () => {
       const { status } = await Location.requestForegroundPermissionsAsync();
@@ -11,9 +10,13 @@ const BottomBar = () => {
         console.log('Location permission was denied.')
         return;
       }
-      let location = await Location.getCurrentPositionAsync({});
-      setUserLatLon([location.coords.latitude, location.coords.longitude]);
-      console.log("User Coordinates Saved")
+      let location = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.Highest
+      });
+      const coords = [location.coords.latitude, location.coords.longitude];
+      console.log("onLocationFound:", onLocationFound, typeof onLocationFound);
+      onLocationFound(coords);
+      console.log(coords);
     }
     return (
       <View style={styles.bottomBar}>
