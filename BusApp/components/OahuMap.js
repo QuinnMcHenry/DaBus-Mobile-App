@@ -32,7 +32,6 @@ const OahuMap = () => {
     useEffect(() => {
         if (!userLocation) return;
         const [lat, lon] = userLocation;
-
         
         mapRef.current.animateToRegion({
             latitudeDelta: 0.009,
@@ -60,6 +59,8 @@ const OahuMap = () => {
   
   
   const handleRegionChangeComplete = (region) => {
+    const maxZoomLat = 0.002;
+    const maxZoomLon = 0.0015;
 
     const centerLat = (oahuBoundary.northEast.latitude + oahuBoundary.southWest.latitude) / 2;
     const centerLng = (oahuBoundary.northEast.longitude + oahuBoundary.southWest.longitude) / 2;
@@ -73,6 +74,17 @@ const OahuMap = () => {
     const isZoomedOut =
       region.latitudeDelta > 0.7 || region.longitudeDelta > 0.7;
   
+    const isZoomedTooFar = 
+        region.latitudeDelta < maxZoomLat || region.longitudeDelta < maxZoomLon;
+
+    if (isZoomedTooFar) {
+      mapRef.current?.animateToRegion({
+        latitude: region.latitude,
+        longitude: region.longitude,
+        latitudeDelta: Math.max(region.latitudeDelta, maxZoomLat),
+        longitudeDelta: Math.max(region.longitudeDelta, maxZoomLon),
+      }, 150);
+    }
     if (isOutOfBounds || isZoomedOut) {
       mapRef.current?.animateToRegion({
         latitude: centerLat,
@@ -109,6 +121,8 @@ const OahuMap = () => {
 
           {userLocation && topStops.map(stop => (
             <Marker
+                tracksViewChanges={false}
+                flat={true}
                 key={stop.id}
                 coordinate={{ latitude: stop.lat, longitude: stop.lon }}
                 title={`Stop ${stop.id}`}
