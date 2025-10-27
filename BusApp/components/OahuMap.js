@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { View, StyleSheet, Modal, TextInput, Button } from 'react-native';
+import { View, StyleSheet } from 'react-native';
 import MapView, { UrlTile, PROVIDER_DEFAULT, Marker } from 'react-native-maps';
 import BottomBar from './BottomBar';
 import stops from '../assets/stops.json';
