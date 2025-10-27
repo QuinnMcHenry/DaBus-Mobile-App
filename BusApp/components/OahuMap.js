@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { View, StyleSheet, Modal, TextInput, Button } from 'react-native';
 import MapView, { UrlTile, PROVIDER_DEFAULT, Marker } from 'react-native-maps';
 import BottomBar from './BottomBar';
-import stops from '../assets/stops.json'
+import stops from '../assets/stops.json';
 
 
 function haversine(lat1, lon1, lat2, lon2) {
