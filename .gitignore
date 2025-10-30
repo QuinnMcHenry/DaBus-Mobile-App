@@ -2,6 +2,8 @@
 .env
 stop46.json
 stops.txt
+shapes.txt
+util.py
 
 # dependencies
 /BusApp/node_modules/
