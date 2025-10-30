@@ -89,8 +89,7 @@ const OahuMap = () => {
       northEast: {latitude: 22.09183846946574, longitude:  -157.63530947229376},
       southWest: {latitude: 20.79775211599588, longitude: -158.2575068774979}
     };
-  
-  
+
   const handleRegionChangeComplete = (region) => {
     const maxZoomLat = 0.002;
     const maxZoomLon = 0.001;
