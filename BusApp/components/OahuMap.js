@@ -92,6 +92,8 @@ const OahuMap = () => {
   
   
   const handleRegionChangeComplete = (region) => {
+    const maxZoomLat = 0.002;
+    const maxZoomLon = 0.001;
 
     const centerLat = (oahuBoundary.northEast.latitude + oahuBoundary.southWest.latitude) / 2;
     const centerLng = (oahuBoundary.northEast.longitude + oahuBoundary.southWest.longitude) / 2;
@@ -105,6 +107,17 @@ const OahuMap = () => {
     const isZoomedOut =
       region.latitudeDelta > 0.7 || region.longitudeDelta > 0.7;
   
+    const isZoomedTooFar =
+        region.latitudeDelta < maxZoomLat || region.longitudeDelta < maxZoomLon;
+
+    if (isZoomedTooFar) {
+        mapRef.current?.animateToRegion({
+            latitude:region.latitude,
+            longitude:region.longitude,
+            latitudeDelta: Math.max(region.latitudeDelta, maxZoomLat),
+            longitudeDelta: Math.max(region.longitudeDelta, maxZoomLon)
+        }, 150);
+    }
     if (isOutOfBounds || isZoomedOut) {
       mapRef.current?.animateToRegion({
         latitude: centerLat,
@@ -134,7 +147,7 @@ const OahuMap = () => {
           onRegionChangeComplete={handleRegionChangeComplete}
         >
           <UrlTile
-            urlTemplate="https://cartodb-basemaps-a.global.ssl.fastly.net/light_all/{z}/{x}/{y}.png"
+            urlTemplate="http://basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
             maximumZ={19}
             flipY={false}
             tileSize={256}
