@@ -1,10 +1,43 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { View, StyleSheet, Modal, TextInput, Button, Text } from 'react-native';
-import MapView, { UrlTile, PROVIDER_DEFAULT, Marker } from 'react-native-maps';
+import MapView, { UrlTile, PROVIDER_DEFAULT, Marker, Polyline } from 'react-native-maps';
 import BottomBar from './BottomBar';
 import stops from '../assets/stops.json'
+import shapes from '../assets/shapes.json'
+import { API_KEY } from '@env'
 
-console.log("Marker type: ", typeof Marker);
+async function findBestBus(topStops, destCoords, arrivalsByStop) {
+    let bestBus = null;
+    let bestStop = null;
+    let minDistance = Infinity;
+
+    for (let stop of topStops) {
+        const arrivals = arrivalsByStop[stop.id] || [];
+        for (let arrival of arrivals) {
+            if (!arrival.shape) continue;
+
+            const shapeCoords = shapes[arrival.shape];
+            if (!shapeCoords || shapeCoords.length === 0) continue;
+
+            const finalCoord = shapeCoords[shapeCoords.length - 1];
+
+            const distanceToDest = haversine(
+                finalCoord[0],
+                finalCoord[1],
+                destCoords[0],
+                destCoords[1]
+            );
+
+            if (distanceToDest < minDistance) {
+                minDistance = distanceToDest;
+                bestBus = arrival;
+                bestStop = stop;
+            }
+        }
+    }
+
+    return { bestBus, bestStop };
+}
 
 
 function haversine(lat1, lon1, lat2, lon2) {
@@ -32,6 +65,10 @@ const OahuMap = () => {
     const [destination, setDestination] = useState('');
     const [destCoords, setDestCoords] = useState(null);
     const [showDestPopup, setShowDestPopup] = useState(false);
+    const [bestBus, setBestBus] = useState(null);
+    const [bestStop, setBestStop] = useState(null);
+    const [bestBusShape, setBestBusShape] = useState([]);
+
     const mapRef = useRef(null);
 
     useEffect(() => {
@@ -57,6 +94,12 @@ const OahuMap = () => {
     setTopStops(closest);
     setShowDestPopup(true);
     }, [userLocation]);
+
+    useEffect(() => {
+        if (destCoords && topStops.length > 0) {
+            fetchArrivalsForStops();
+        }
+    }, [destCoords]);
 
 
     const handleDestinationSubmit = async () => {
@@ -126,8 +169,57 @@ const OahuMap = () => {
       }, 300);
     }
   };
+
   
-    const [selectedCoord, setSelectedCoord] = useState(null)
+    const fetchArrivals = async (stopID) => {
+        try {
+            const url = `http://api.thebus.org/arrivalsJSON/?key=${API_KEY}&stop=${stopID}`;
+            const response = await fetch(url);
+            const data = await response.json();
+
+            if (!data.arrivals) return [];
+            
+            const validArrvials = data.arrivals.filter(
+                a => parseFloat(a.latitude) !== 0 && parseFloat(a.longitude) !== 0
+            );
+
+            return validArrvials;
+        } catch (err) {
+            console.error(`Error fetching arrivals for stop ${stopID}`);
+            return [];
+        }
+    };
+
+    const fetchArrivalsForStops = async () => {
+        if (!topStops || topStops.length === 0 || !destCoords) return;
+
+        console.log('Fetching arrivlas for nearest stops..');
+        const arrivalsByStop = {};
+
+        for (const stop of topStops) {
+            const arrivals = await fetchArrivals(stop.id);
+            arrivalsByStop[stop.id] = arrivals;
+        }
+
+        console.log('Collected arrivals: ', arrivalsByStop);
+        const { bestBus, bestStop } = await findBestBus(topStops, destCoords, arrivalsByStop);
+        if (bestBus && bestStop) {
+            console.log("Best bus: ", bestBus);
+            console.log("Final destination for ", bestBus.vehicle, ": ", bestStop);
+            const shapeCoords = shapes[bestBus.shape]?.map(p => ({
+                latitude: p[0],
+                longitude: p[1]
+            })) || [];
+            setBestBusShape(shapeCoords);
+        } else {
+            console.log("No suitable bus found for this destination");
+            setBestBusShape([]);
+        }
+
+        setBestBus(bestBus);
+        setBestStop(bestStop);
+        
+    };
   
     // Southwest: 20.79775211599588 -158.2575068774979
     // Northeast: 22.09183846946574 -157.63530947229376
@@ -160,6 +252,15 @@ const OahuMap = () => {
                 title={`Stop ${stop.id}`}
                 />
           ))}
+
+
+          {bestBusShape.length > 0 && (
+            <Polyline
+                coordinates={bestBusShape}
+                strokeColor="#1E90FF"
+                strokeWidth={4}
+            />
+          )}
 
         </MapView>
         <BottomBar onLocationFound={setUserLocation} />
