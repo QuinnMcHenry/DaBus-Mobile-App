@@ -6,7 +6,9 @@ from pathlib import Path
 import shutil
 from collections import defaultdict
 from s3_utils import upload_folder_to_s3
+import shutil
 
+# Configuration
 GTFS_URL = "https://www.thebus.org/transitdata/production/google_transit.zip"
 DOWNLOAD_DIR = Path("gtfs_latest")
 ZIP_PATH = DOWNLOAD_DIR / "google_transit.zip"
