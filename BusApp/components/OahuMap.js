@@ -6,7 +6,7 @@ import stops from '../assets/stops.json';
 import shapes from '../assets/shapes.json';
 import { API_KEY } from '@env';
 
-// ---------------------- TRIP CACHE ----------------------
+// trip cache 
 const tripFileCache = {};
 async function getTrip(tripId) {
   const chunk = tripId.slice(0, 3);
@@ -20,7 +20,50 @@ async function getTrip(tripId) {
   return tripFileCache[chunk][tripId];
 }
 
-// ---------------------- UTILITY FUNCTIONS ----------------------
+// stops -> trip cache
+const stopTripsCache = {};
+async function getStopTrips(stopId) {
+  if (stopTripsCache[stopId]) return stopTripsCache[stopId];
+
+  const tripsContainingStop = [];
+
+  // only scan cached chunks first
+  for (const chunk of Object.keys(tripFileCache)) {
+    const trips = tripFileCache[chunk];
+    for (const [tripId, trip] of Object.entries(trips)) {
+      if (trip?.stops?.some(s => s.stop_id === stopId)) {
+        tripsContainingStop.push({ trip_id: tripId });
+      }
+    }
+  }
+
+  const prefixes = [514, 515, 516, 520, 521, 522];
+  for (const prefix of prefixes) {
+    const chunk = prefix.toString();
+    if (!tripFileCache[chunk]) {
+      try {
+        console.log(`Fetching trip lookup chunk for stop search: ${chunk}.json`);
+        const res = await fetch(
+          `https://gtfs-bus-bucket.s3.amazonaws.com/gtfs_latest/json/trip_lookup/${chunk}.json`
+        );
+        tripFileCache[chunk] = await res.json();
+        const trips = tripFileCache[chunk];
+        for (const [tripId, trip] of Object.entries(trips)) {
+          if (trip?.stops?.some(s => s.stop_id === stopId)) {
+            tripsContainingStop.push({ trip_id: tripId });
+          }
+        }
+      } catch (err) {
+        console.error(`Failed to fetch trip chunk ${chunk}`, err);
+        tripFileCache[chunk] = {};
+      }
+    }
+  }
+
+  stopTripsCache[stopId] = tripsContainingStop;
+  return tripsContainingStop;
+}
+
 const haversine = (lat1, lon1, lat2, lon2) => {
   const R = 6371000;
   const toRad = x => (x * Math.PI) / 180;
@@ -32,30 +75,9 @@ const haversine = (lat1, lon1, lat2, lon2) => {
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 };
 
-// ---------------------- STOP LOOKUP CACHE ----------------------
-const stopFileCache = {};
-async function getStopTrips(stopId) {
-  const fileName = `${stopId}.json`;
-  if (!stopFileCache[fileName]) {
-    const url = `https://gtfs-bus-bucket.s3.amazonaws.com/gtfs_latest/json/stop_lookup/${fileName}`;
-    console.log(`Fetching stop lookup: ${url}`);
-    try {
-      const res = await fetch(url);
-      stopFileCache[fileName] = await res.json();
-    } catch (err) {
-      console.error(`Failed to fetch stop lookup for ${stopId}`, err);
-      stopFileCache[fileName] = {};
-    }
-  }
-  return stopFileCache[fileName][stopId] || stopFileCache[fileName] || [];
-}
-
-// ---------------------- MULTI-LEG FINDER ----------------------
+// build legs
 async function findFullTrip(startStops, destinationCoords, maxTransfers = 2) {
-  if (!startStops?.length || !destinationCoords) {
-    console.log("Skipping findFullTrip – missing inputs");
-    return null;
-  }
+  if (!startStops?.length || !destinationCoords) return null;
 
   console.log(`Starting findFullTrip for stops: ${startStops.map(s => s.id).join(', ')}`);
   const queue = [];
@@ -79,11 +101,14 @@ async function findFullTrip(startStops, destinationCoords, maxTransfers = 2) {
       if (!trip?.stops?.length) continue;
 
       const stopSequence = trip.stops;
-      const startIndex = stopSequence.indexOf(stopId);
+      const startIndex = stopSequence.findIndex(s => s.stop_id === stopId);
       if (startIndex === -1) continue;
 
       for (let i = startIndex + 1; i < stopSequence.length; i++) {
-        const nextStopId = stopSequence[i];
+        const nextStopObj = stopSequence[i];
+        const nextStopId = nextStopObj.stop_id;
+        const arrivalTime = nextStopObj.arrival_time;
+        const departureTime = nextStopObj.departure_time;
         const nextStop = stops.find(s => s.id === nextStopId);
         if (!nextStop) continue;
 
@@ -94,20 +119,18 @@ async function findFullTrip(startStops, destinationCoords, maxTransfers = 2) {
           destinationCoords[1]
         );
 
-        // ✅ Destination within 500m
-        if (distToDest < 500) {
-          console.log(`Destination reachable via ${tripId} → stop ${nextStopId}`);
+        if (distToDest < 500) { // 500m
+          console.log(`Destination reachable via ${tripId} → stop ${nextStopId} at ${arrivalTime}`);
           return {
-            legs: [...path, { tripId, fromStop: stopId, toStop: nextStopId }],
+            legs: [...path, { tripId, fromStop: stopId, toStop: nextStopId, arrivalTime, departureTime }],
             finalStop: nextStop,
           };
         }
 
-        // 🚏 Enqueue transfers if within limit
         if (path.length < maxTransfers) {
           queue.push({
             stopId: nextStopId,
-            path: [...path, { tripId, fromStop: stopId, toStop: nextStopId }],
+            path: [...path, { tripId, fromStop: stopId, toStop: nextStopId, arrivalTime, departureTime }],
           });
         }
       }
@@ -125,7 +148,7 @@ const OahuMap = () => {
   const [destination, setDestination] = useState('');
   const [destCoords, setDestCoords] = useState(null);
   const [showDestPopup, setShowDestPopup] = useState(false);
-
+  const [loadingMessage, setLoadingMessage] = useState('');
   const [tripLegs, setTripLegs] = useState([]);
   const [transferStops, setTransferStops] = useState([]);
   const [finalStop, setFinalStop] = useState(null);
@@ -133,7 +156,8 @@ const OahuMap = () => {
 
   const mapRef = useRef(null);
 
-  // ---------------------- USER LOCATION EFFECT ----------------------
+
+// find user
   useEffect(() => {
     if (!userLocation) return;
     const [lat, lon] = userLocation;
@@ -152,13 +176,15 @@ const OahuMap = () => {
     setShowDestPopup(true);
   }, [userLocation]);
 
-  // ---------------------- DESTINATION EFFECT ----------------------
+  //  find destination
   useEffect(() => {
     if (!destCoords || topStops.length === 0) return;
 
     (async () => {
       console.log("Running full trip search...");
+      setLoadingMessage("Building trip...");
       const result = await findFullTrip(topStops, destCoords, 2);
+      setLoadingMessage('');
 
       if (!result) {
         console.log("No route found.");
@@ -188,7 +214,6 @@ const OahuMap = () => {
           });
         }
 
-        // collect transfer stop
         if (i < result.legs.length - 1) {
           const transferStop = stops.find(s => s.id === leg.toStop);
           if (transferStop) transfers.push(transferStop);
@@ -200,7 +225,7 @@ const OahuMap = () => {
     })();
   }, [destCoords, topStops]);
 
-  // ---------------------- DESTINATION SUBMIT ----------------------
+  // nominatim
   const handleDestinationSubmit = async () => {
     if (!destination) return;
     console.log("Submitting destination:", destination);
@@ -227,7 +252,7 @@ const OahuMap = () => {
     }
   };
 
-  // ---------------------- MAP BOUNDARY ----------------------
+  // map controls
   const oahuBoundary = {
     northEast: { latitude: 22.09183846946574, longitude: -157.63530947229376 },
     southWest: { latitude: 20.79775211599588, longitude: -158.2575068774979 },
@@ -265,9 +290,14 @@ const OahuMap = () => {
     }
   };
 
-  // ---------------------- RENDER ----------------------
+
   return (
     <View style={styles.container}>
+        {loadingMessage ? (
+    <View style={styles.loadingOverlay}>
+    <Text style={styles.loadingText}>{loadingMessage}</Text>
+    </View>
+) : null}
       <MapView
         ref={mapRef}
         provider={PROVIDER_DEFAULT}
@@ -351,6 +381,19 @@ export default OahuMap;
 
 // ---------------------- STYLES ----------------------
 const styles = StyleSheet.create({
+    loadingOverlay: {
+        position: 'absolute',
+        top: 50,
+        left: 0,
+        right: 0,
+        alignItems: 'center',
+        backgroundColor: 'rgba(0,0,0,0.5)',
+        padding: 10,
+        borderRadius: 5,
+        zIndex: 10,
+      },
+      loadingText: { color: '#fff', fontSize: 16 },
+      
   container: { ...StyleSheet.absoluteFillObject, justifyContent: 'flex-end', alignItems: 'center' },
   map: { ...StyleSheet.absoluteFillObject },
   popupContainer: {

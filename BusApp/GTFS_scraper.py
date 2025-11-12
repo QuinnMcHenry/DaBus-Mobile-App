@@ -8,14 +8,12 @@ from collections import defaultdict
 from s3_utils import upload_folder_to_s3
 import shutil
 
-# Configuration
 GTFS_URL = "https://www.thebus.org/transitdata/production/google_transit.zip"
 DOWNLOAD_DIR = Path("gtfs_latest")
 ZIP_PATH = DOWNLOAD_DIR / "google_transit.zip"
 META_PATH = DOWNLOAD_DIR / "meta.json"
 JSON_DIR = DOWNLOAD_DIR / "json"
 
-# Ensure directories exist
 DOWNLOAD_DIR.mkdir(exist_ok=True)
 JSON_DIR.mkdir(exist_ok=True)
 
